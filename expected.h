@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cassert>
+#include <coroutine>
 #include <iostream>
 #include <type_traits>
 #include <utility>
@@ -52,6 +54,30 @@ public:
     using value_type = T;
     using error_type = E;
 
+    expected()
+    {
+        // std::cout << "ctor\n";
+    }
+    expected(const expected& exp) noexcept = delete;
+    expected& operator=(const expected& exp) noexcept = delete;
+    expected(expected&& exp) noexcept // don't known why = default make a double free
+    {
+        std::swap(handle_, exp.handle_);
+    };
+    expected& operator=(expected&& exp) noexcept
+    {
+        std::swap(handle_, exp.handle_);
+        return *this;
+    };
+    ~expected()
+    {
+        if (handle_)
+        {
+            handle_.destroy();
+        }
+    }
+
+    /*
     template <typename... Args>
     expected(std::in_place_t, Args&&... args)
         : data_{std::in_place_type_t<T>{}, std::forward<Args>(args)...}
@@ -77,9 +103,81 @@ public:
     {
         return std::get<unexpected<E>>(std::move(data_)).error();
     }
+    */
+    constexpr auto error() const& noexcept -> const E&
+    {
+        // std::cout << "error() " << this << " with " << handle_.address() << "\n";
+        return std::get<unexpected<E>>(handle_.promise().data_).error();
+    }
+    constexpr auto value() const& noexcept -> const T&
+    {
+        // std::cout << "error() " << this << " with " << handle_.address() << "\n";
+        return std::get<T>(handle_.promise().data_);
+    }
+
+    struct promise_type
+    {
+        std::variant<T, unexpected<E>> data_;
+
+        auto get_return_object() -> expected<T, E>
+        {
+            std::coroutine_handle<promise_type> handle =
+                std::coroutine_handle<promise_type>::from_promise(*this);
+            return expected<T, E>{handle};
+        }
+        auto initial_suspend() -> std::suspend_never
+        {
+            return {};
+        }
+        auto final_suspend() noexcept -> std::suspend_always
+        {
+            return {};
+        }
+        void return_value(unexpected<E>&& error)
+        {
+            // std::coroutine_handle<promise_type> handle =
+            //     std::coroutine_handle<promise_type>::from_promise(*this);
+            // std::cout << "return_value(unexpected<E>&& error): " << this << " with "
+            //           << handle.address() << "\n";
+            data_ = std::move(error);
+        }
+        void return_value(T&& value)
+        {
+            data_ = std::move(value);
+        }
+        void return_value(expected<T, E>&& exp)
+        {
+            data_ = std::move(exp.handle_.promise().data_);
+        }
+        void unhandled_exception()
+        {}
+    };
+
+    auto await_ready() -> bool
+    {
+        assert(handle_);
+        return std::holds_alternative<T>(handle_.promise().data_);
+    }
+    void await_suspend(std::coroutine_handle<promise_type> handle)
+    {
+        assert(handle_);
+        // std::cout << "suspend error " << error() << " with " << handle.address() << "\n";
+        handle.promise().data_ = std::move(handle_.promise().data_);
+    }
+    auto await_resume() -> T
+    {
+        assert(std::holds_alternative<T>(handle_.promise().data_) && "resume an unexpected value");
+        return std::get<T>(handle_.promise().data_);
+    }
 
 private:
-    std::variant<T, unexpected<E>> data_;
+    friend promise_type;
+
+    explicit expected(std::coroutine_handle<promise_type> handle) noexcept : handle_{handle}
+    {
+        // std::cout << "ctor2: " << this << " with " << handle.address() << "\n";
+    }
+    std::coroutine_handle<promise_type> handle_ = nullptr;
 };
 
 } // namespace ender

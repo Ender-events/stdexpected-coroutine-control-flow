@@ -13,7 +13,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 add_executable(demo
     demo.cpp
 )
-target_compile_features(demo PUBLIC cxx_std_20)
+target_compile_features(demo PUBLIC cxx_std_23)
 target_compile_options(demo PUBLIC -Wall -Wextra -Wpedantic -Werror)
 
 if(SANITIZE_ADDRESS)
