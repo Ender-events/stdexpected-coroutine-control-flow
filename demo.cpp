@@ -36,8 +36,8 @@ expected<int, int> test_error()
 auto main() -> int
 {
     std::expected<int, int> tata{};
-    auto exp = ender::test_error();
+    auto exp = ender::test_error().to_std();
     std::cout << "main error: " << exp.error() << '\n';
-    exp = ender::test_value();
+    exp = ender::test_value().to_std();
     std::cout << "main value: " << exp.value() << '\n';
 }

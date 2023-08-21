@@ -7,14 +7,14 @@
 #include <utility>
 #include <variant>
 
+template <class... Ts>
+struct overloaded : Ts...
+{
+    using Ts::operator()...;
+};
+
 namespace ender
 {
-struct unexpect_t
-{
-
-    explicit unexpect_t() = default;
-};
-inline constexpr unexpect_t unexpect{};
 template <typename E>
 class unexpected
 {
@@ -77,42 +77,51 @@ public:
         }
     }
 
-    /*
-    template <typename... Args>
-    expected(std::in_place_t, Args&&... args)
-        : data_{std::in_place_type_t<T>{}, std::forward<Args>(args)...}
-    {}
-
-    template <typename... Args>
-    expected(unexpect_t, Args&&... args)
-        : data_{std::in_place_type_t<unexpected<E>>{}, std::forward<Args>(args)...}
-    {}
     constexpr auto error() const& noexcept -> const E&
     {
-        return std::get<unexpected<E>>(data_).error();
-    }
-    constexpr auto error() & noexcept -> E&
-    {
-        return std::get<unexpected<E>>(data_).error();
-    }
-    constexpr auto error() const&& noexcept -> const E&&
-    {
-        return std::get<unexpected<E>>(std::move(data_)).error();
-    }
-    constexpr auto error() && noexcept -> E&&
-    {
-        return std::get<unexpected<E>>(std::move(data_)).error();
-    }
-    */
-    constexpr auto error() const& noexcept -> const E&
-    {
+        // TODO: deducing this
         // std::cout << "error() " << this << " with " << handle_.address() << "\n";
         return std::get<unexpected<E>>(handle_.promise().data_).error();
     }
+    constexpr auto error() & noexcept -> E&
+    {
+        return std::get<unexpected<E>>(handle_.promise().data_).error();
+    }
+    constexpr auto error() const&& noexcept -> const E&&
+    {
+        return std::get<unexpected<E>>(std::move(handle_.promise().data_)).error();
+    }
+    constexpr auto error() && noexcept -> E&&
+    {
+        return std::get<unexpected<E>>(std::move(handle_.promise().data_)).error();
+    }
     constexpr auto value() const& noexcept -> const T&
     {
+        // TODO: deducing this
         // std::cout << "error() " << this << " with " << handle_.address() << "\n";
         return std::get<T>(handle_.promise().data_);
+    }
+    constexpr auto value() & noexcept -> T&
+    {
+        return std::get<T>(handle_.promise().data_);
+    }
+    constexpr auto value() const&& noexcept -> const T&&
+    {
+        return std::get<T>(std::move(handle_.promise().data_));
+    }
+    constexpr auto value() && noexcept -> T&&
+    {
+        return std::get<T>(std::move(handle_.promise().data_));
+    }
+
+    constexpr auto to_std() && noexcept -> std::expected<T, E>
+    {
+        return std::visit(overloaded{[](T&& v) { return std::expected<T, E>{v}; },
+                                     [](unexpected<E>&& e) {
+                                         return std::expected<T, E>{
+                                             std::unexpected<E>{std::move(e).error()}};
+                                     }},
+                          std::move(handle_.promise().data_));
     }
 
     struct promise_type
