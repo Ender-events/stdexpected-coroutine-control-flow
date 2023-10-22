@@ -54,10 +54,6 @@ public:
     using value_type = T;
     using error_type = E;
 
-    expected()
-    {
-        // std::cout << "ctor\n";
-    }
     expected(const expected& exp) noexcept = delete;
     expected& operator=(const expected& exp) noexcept = delete;
     expected(expected&& exp) noexcept // don't known why = default make a double free
@@ -126,7 +122,27 @@ public:
 
     struct promise_type
     {
+        promise_type()
+        {
+            std::cout << "ctor promise_type\n";
+        }
+        promise_type(int a)
+        {
+            std::cout << "ctor promise_type " << a << "\n";
+        }
         std::variant<T, unexpected<E>> data_;
+
+        void* operator new(size_t c)
+        {
+            std::cout << "promise_type::new " << c << '\n';
+            return std::malloc(c);
+        }
+
+        void operator delete(void* p)
+        {
+            std::cout << "promise_type::delete " << p << '\n';
+            return std::free(p);
+        }
 
         auto get_return_object() -> expected<T, E>
         {
@@ -184,7 +200,7 @@ private:
 
     explicit expected(std::coroutine_handle<promise_type> handle) noexcept : handle_{handle}
     {
-        // std::cout << "ctor2: " << this << " with " << handle.address() << "\n";
+        std::cout << "ctor: " << this << " with " << handle.address() << "\n";
     }
     std::coroutine_handle<promise_type> handle_ = nullptr;
 };
